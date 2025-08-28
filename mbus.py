@@ -40,7 +40,6 @@ def parse_long_frame(frame: bytes):
         return None
     payload = frame[4:4+L]
     ctrl, addr, CI = payload[0], payload[1], payload[2]
-    # ID alanı örnek: payload[3:7]  (cihazına göre değişebilir)
     slave_id_bytes = payload[3:7] if len(payload) >= 7 else b'\x00\x00\x00\x00'
     slave_id_hex = slave_id_bytes.hex().upper()
     bcd = payload[5:5+4]
@@ -254,7 +253,6 @@ class MBusGUI:
         self.period_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_report())
         self.pdf_btn = tk.Button(top, text="PDF Olarak Kaydet", font=("Segoe UI", 10), command=self.export_pdf)
         self.pdf_btn.pack(side="left", padx=(12, 8))
-        # Pik kullanım için threshold alanı
         self.threshold_var = tk.IntVar(value=300)
         self.threshold_label = tk.Label(top, text="Eşik (m³):", font=("Segoe UI", 11), bg="white")
         self.threshold_entry = tk.Entry(top, width=7, textvariable=self.threshold_var, font=("Segoe UI", 11))
@@ -279,7 +277,6 @@ class MBusGUI:
         import time
         from tkinter import filedialog
 
-        # 1. Kullanıcıya kayıt yeri sor
         defaultname = f"rapor_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.pdf"
         fname = filedialog.asksaveasfilename(
             title="PDF Olarak Kaydet",
@@ -288,17 +285,15 @@ class MBusGUI:
             filetypes=[("PDF Dosyası", "*.pdf")]
         )
         if not fname:
-            return  # İptal edildiyse
+            return
 
         doc = SimpleDocTemplate(fname, pagesize=A4)
 
-        # 2. Tablo verisi
         columns = self.report_table["columns"]
         data = [columns]
         for item in self.report_table.get_children():
             data.append(list(self.report_table.item(item)["values"]))
 
-        # 3. Tabloyu oluştur
         tbl = Table(data, hAlign="LEFT")
         tbl.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1976d2")),
@@ -311,7 +306,6 @@ class MBusGUI:
             ("GRID", (0, 0), (-1, -1), 0.5, colors.gray),
         ]))
 
-        # 4. Grafik varsa PNG olarak kaydet (geçici dosya)
         story = []
         story.append(Paragraph(f"<b>Rapor: {self.period_combo.get()}</b>", getSampleStyleSheet()["Title"]))
         story.append(Spacer(1, 16))
@@ -327,10 +321,8 @@ class MBusGUI:
             story.append(Image(tmpimg_name, width=430, height=200))
             has_graph = True
 
-        # 5. PDF’i oluştur
         doc.build(story)
 
-        # 6. Geçici dosya varsa sil (Windows fix)
         if has_graph and tmpimg_name:
             for _ in range(10):
                 try:
@@ -339,7 +331,6 @@ class MBusGUI:
                 except PermissionError:
                     time.sleep(0.2)
 
-        # 7. Başarı mesajı
         messagebox.showinfo("PDF Kaydedildi", f"Rapor PDF olarak kaydedildi:\n{fname}")
 
     def show_slave_history(self, event):
@@ -365,7 +356,6 @@ class MBusGUI:
         win.geometry("1020x800")
         win.configure(bg="white")
 
-        # Kaydırılabilir ana alan
         canvas = tk.Canvas(win, bg="white", highlightthickness=0)
         scrollbar = tk.Scrollbar(win, orient="vertical", command=canvas.yview)
         scroll_frame = tk.Frame(canvas, bg="white")
@@ -474,12 +464,10 @@ class MBusGUI:
             last_read = cur.fetchone()[0]
             conn.close()
 
-            # Tabloya doldur
             table.delete(*table.get_children())
             for g, v in zip(days_, vals_):
                 table.insert("", "end", values=(g, f"{v:.2f}"))
 
-            # İstatistikler
             stats = [
                 f"Slave: {sid}",
                 f"Top: {toplam:.2f} m³",
@@ -491,7 +479,6 @@ class MBusGUI:
             for i, stat in enumerate(stats):
                 stats_labels[i].config(text=stat)
 
-            # Grafik güncelle
             ax.clear()
             ax.bar(range(len(days_)), vals_, color="#2196f3", label="Bar")
             ax.plot(range(len(days_)), vals_, color="#e53935", marker="o", linewidth=2, label="Trend")
@@ -504,11 +491,9 @@ class MBusGUI:
             fig.tight_layout()
             canvas_mpl.draw()
 
-        # İlk açılışta ve slider değişince
         update_panel(slider.get())
         slider.config(command=lambda val: update_panel(int(val)))
 
-        # Kaydırma tekerleğiyle de çalışsın:
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
@@ -646,7 +631,6 @@ class MBusGUI:
             widget.destroy()
         period = self.period_combo.get() or "Günlük"
 
-        # Pik Kullanım sekmesinde threshold kutusu görünür, diğerlerinde gizli
         if period == "Pik Kullanım":
             self.threshold_label.pack(side="left", padx=(30, 2))
             self.threshold_entry.pack(side="left")
@@ -656,7 +640,6 @@ class MBusGUI:
             self.threshold_entry.pack_forget()
             self.threshold_btn.pack_forget()
 
-        # --- Trend Grafiği sekmesi: sadece grafik, tablo gizli ---
         if period == "Trend Grafiği":
             self.report_table.pack_forget()
             rows = fetch_trend(days=7)
@@ -883,7 +866,6 @@ class MBusGUI:
                 self.report_table.item(last, tags=('pik',))
             else:
                 self.report_table.insert("", "end", values=("", f"Eşik üstü değer yok (>{threshold} m³)"))
-        # Grafik: toplam tüketim (isteğe göre slave bazında da gösterebiliriz)
         if x_labels and total_vals and period not in ["Aylık", "Trend Grafiği"]:
             self.ax.bar(x_labels, total_vals, color="#1976d2")
             self.ax.set_title(f"{period} Toplam Su Tüketimi")
@@ -904,3 +886,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = MBusGUI(root)
     root.mainloop()
+
